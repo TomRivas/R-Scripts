@@ -1,0 +1,145 @@
+---
+title: "DESeq2!"
+output: html_notebook
+---
+
+# load in libraries silently
+```{r libraries, warning = FALSE, message = FALSE}
+library(tidyverse)
+library(DESeq2)
+library(ggplot2)
+library(magrittr)
+
+library(extrafont)
+font_import(pattern="[H/h]elvetica")
+```
+
+# Load in files
+```{r message=FALSE, warning=FALSE}
+directory <- "C:/Users/Tom/Documents/Bedtools_count/250 shift/My list/"
+files <- grep("count", list.files(directory), value=TRUE)
+sample_names <- str_remove(files, "_count_Hg19.bed")
+for(i in 1:length(sample_names)){
+  assign(sample_names[i], read_delim(directory %>% paste(files[i], sep=""), 
+                                             delim = "\t", 
+                                             col_names=c("chr","start","stop","gene","quality","strand", sample_names[i], "who","cares")) %>% select(1:7))
+}
+
+#combine files into a single dataframe
+df <- left_join(Mock1 %>% select(4,7), Mock2 %>% select(4,7), by = c("gene"))
+df %<>% left_join(WT1 %>% select(4,7), by = c("gene")) %>% left_join(WT2 %>% select(4,7), by = c("gene"))
+df %<>% left_join(dICP41 %>% select(4,7), by = c("gene")) %>% left_join(dICP42 %>% select(4,7), by = c("gene"))
+df %<>% column_to_rownames("gene")
+
+#make coldata for DESeq2
+coldata <- as.data.frame(c("mock","mock","wt","wt", "dICP4","dICP4"))
+coldata <- cbind(coldata, c(rep("paired-end",each=6)))
+colnames(coldata) <- c("condition","type")
+rownames(coldata) <- colnames(df)
+
+#cleanup files
+rm(dICP41,dICP42,Mock1,Mock2,WT1,WT2,directory,files,i,sample_names)
+```
+
+# Make DESeq object and run DESeq2
+```{r}
+dds <- DESeqDataSetFromMatrix(countData = df,
+                               colData = coldata,
+                               design = ~condition)
+dds$condition <- relevel(dds$condition, ref = "mock")
+
+#pre-filter
+dds <- dds[rowSums(counts(dds)) >= 10,]
+
+#run DESeq
+dds <- DESeq(dds)
+
+#get results with p-adj < 0.05, mock vs wt
+resWTvM <- results(dds, contrast=c("condition","wt","mock"))
+summary(resWTvM)
+resWTvMOrdered <- resWTvM[order(resWTvM$pvalue),]
+resSigWTvM <- subset(resWTvMOrdered, padj < 0.05) #limit to significant changes
+resSigWTvM_lfc <- resSigWTvM[(resSigWTvM[[2]]>1 | resSigWTvM[[2]] < (-1)),] #set l2fc cutoffs
+
+#Export data as csv. Filter more later.
+write.csv(as.data.frame(resSigWTvM_lfc),"DESeq2_WTvM_padj05_l2fc1.csv")
+write.csv(as.data.frame(resWTvM),"DESeq2_WTvM_all.csv")
+
+#get results with p-adj < 0.05, mock vs n12
+resMvn12 <- results(dds, contrast=c("condition","dICP4","mock"))
+summary(resMvn12)
+resMvn12Ordered <- resMvn12[order(resMvn12$pvalue),]
+resSigMvn12 <- subset(resMvn12Ordered, padj < 0.05) #limit to significant changes
+resSigMvn12_lfc <- resSigMvn12[(resSigMvn12[[2]]>1 | resSigMvn12[[2]] < (-1)),] #set l2fc cutoffs
+
+#Export data as csv. Filter more later.
+write.csv(as.data.frame(resSigMvn12_lfc),"DESeq2_Mvn12_padj05_l2fc1.csv")
+write.csv(as.data.frame(resMvn12),"DESeq2_Mvn12_all.csv")
+
+#cleanup files
+rm(df,resMvn12,resMvn12Ordered,resSigMvn12,resSigMvn12_lfc,resWTvM,resWTvMOrdered,resSigWTvM,resSigWTvM_lfc)
+```
+
+# Making a PCA plot through DESeq2
+```{r}
+#rlog This function transforms the count data to the log2 scale in a way which minimizes differences between samples for rows with small counts, and which normalizes with respect to library size. 
+#blind = biased or unbiased in terms of knowing the experimental design (eg, replicates)
+rlog_data <- rlog(dds, blind = TRUE)
+
+plotPCA(rlog_data, ntop = nrow(df))
+
+rlog_d <- rlog(dds, blind = FALSE)
+plotPCA(rlog_d)
+```
+
+
+# Making a PCA plot with ggplot2
+```{r, fig.height=3,fig.width=4}
+#assay converts the output of rlog back into a matrix
+rlog_data <- rlog(dds, blind = FALSE) %>% assay
+
+#prcomp performs the PCA and returns a prcomp object
+#rlog_data needs to be transposed (flipping rows and columns) before the analysis
+pc <- prcomp(rlog_data %>% t)
+
+#getting the coordinates, I think the assumption is that PC1 and PC2 explain most of the variation
+pc1 <- pc$x[,1]
+pc2 <- pc$x[,2]
+pc_coordinates <- tibble(pc1 = pc1, pc2 = pc2, name = pc$x %>% rownames, Condition = c("Mock", "Mock", "WT", "WT", "dICP4", "dICP4"))
+pc_coordinates$Condition <- factor(pc_coordinates$Condition, levels = c("Mock","WT","dICP4"))
+summary(pc) # gets variance explained by each pc. Use proportion of variance for PC1 and PC2
+variance <- pc$sdev^2/sum(pc$sdev^2) * 100
+```
+
+# Plot PCA plot
+```{r}
+ggplot(pc_coordinates, aes(x = pc1, y = pc2, color = Condition))+
+  geom_point(size = 1, show.legend=TRUE)+
+  scale_color_manual(name = "Condition", values = c("#222222", "#F11737","#3117F1"))+
+  labs(x = paste0("PC1, ", sprintf("%.1f", variance[1]), " Variance Explained"), 
+       y = paste0("PC2, ", sprintf("%.1f", variance[2]), " Variance Explained"))+
+  scale_x_continuous(expand = c(0, 0))+
+  scale_y_continuous(expand = c(0, 0))+
+  coord_cartesian(ylim=c(-30,30), xlim=c(-40,50))+
+  theme_classic()+
+  theme(text = element_text(size = 8, family = "Helvetica"))
+
+#Add following options to theme() and edit labels in ppt
+      # axis.title.x=element_blank(),
+      # axis.text.x = element_blank(),
+      # axis.text.y = element_blank(),
+      # axis.title.y=element_blank())
+```
+
+# What genes are in the pcs?
+```{r}
+pc1_genes_cutoffs <- pc$rotation[,1] %>% quantile(probs = c(0.025, 0.975))
+pc1_genes <- which(pc$rotation[,1] < pc1_genes_cutoffs[1] | pc$rotation[,1] >pc1_genes_cutoffs[2])
+
+
+pc2_genes_cutoffs <- pc$rotation[,2] %>% quantile(probs = c(0.025, 0.975))
+pc2_genes <- which(pc$rotation[,2] < pc2_genes_cutoffs[1] | pc$rotation[,2] >pc2_genes_cutoffs[2])
+
+pc1_genes %>% names %>% as_tibble %>% write_csv("pc1_genes.csv")
+pc2_genes %>% names %>% as_tibble %>% write_csv("pc2_genes.csv")
+```
