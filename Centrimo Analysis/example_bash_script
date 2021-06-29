@@ -1,0 +1,15 @@
+#!/bin/bash
+
+centrimo --oc unique_n12_act_overbkgd --local --ethresh 10 --neg '/home/tom/Documents/motif/background_motif.fa' '/home/tom/Documents/motif/n12unique_motif.fa' '/home/tom/anaconda3/envs/memesuite2/bin/20210304_JASPAR2018_combined_matrices_18942_meme.meme'
+
+centrimo --oc actoverlap_overbkgd --local --ethresh 10 --neg '/home/tom/Documents/motif/background_motif.fa' '/home/tom/Documents/motif/activatedoverlap_motif.fa' '/home/tom/anaconda3/envs/memesuite2/bin/20210304_JASPAR2018_combined_matrices_18942_meme.meme'
+
+centrimo --oc unique_wt_act_overbkgd --local --ethresh 10 --neg '/home/tom/Documents/motif/background_motif.fa' '/home/tom/Documents/motif/wtunique_motif.fa' '/home/tom/anaconda3/envs/memesuite2/bin/20210304_JASPAR2018_combined_matrices_18942_meme.meme'
+
+centrimo --oc all_wt_act_overbkgd --local --ethresh 10 --neg '/home/tom/Documents/motif/background_motif.fa' '/home/tom/Documents/motif/all_WTact_motif.fa' '/home/tom/anaconda3/envs/memesuite2/bin/20210304_JASPAR2018_combined_matrices_18942_meme.meme'
+
+centrimo --oc all_wt_rep_overbkgd --local --ethresh 10 --neg '/home/tom/Documents/motif/background_motif.fa' '/home/tom/Documents/motif/all_WTrep_motif.fa' '/home/tom/anaconda3/envs/memesuite2/bin/20210304_JASPAR2018_combined_matrices_18942_meme.meme'
+
+centrimo --oc all_n12_act_overbkgd --local --ethresh 10 --neg '/home/tom/Documents/motif/background_motif.fa' '/home/tom/Documents/motif/all_n12act_motif.fa' '/home/tom/anaconda3/envs/memesuite2/bin/20210304_JASPAR2018_combined_matrices_18942_meme.meme'
+
+centrimo --oc all_n12_rep_overbkgd --local --ethresh 10 --neg '/home/tom/Documents/motif/background_motif.fa' '/home/tom/Documents/motif/all_n12rep_motif.fa' '/home/tom/anaconda3/envs/memesuite2/bin/20210304_JASPAR2018_combined_matrices_18942_meme.meme'
